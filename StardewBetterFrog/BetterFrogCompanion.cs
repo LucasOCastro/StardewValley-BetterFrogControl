@@ -2,12 +2,61 @@
 using StardewValley;
 using StardewValley.Companions;
 using StardewValley.Monsters;
-using StardewValley.Network;
 
 namespace StardewBetterFrog;
 
+//StardewValley.Stats.monsterKilled
+//StardewValley.GameLocation.onMonsterKilled
+//StardewValley.Monsters.Monster.takeDamage for knockback
+
 public class BetterFrogCompanion : HungryFrogCompanion
 {
+    private static bool CanCurrentlyEat(GameLocation location)
+    {
+        return location is not SlimeHutch;
+    }
+    
+    private const int TongueCenterOffset = 32;
+    private const int TongueCollisionSize = 40;
+    private const float Speed = 12f;
+    private const int TongueCollisionOffset = TongueCenterOffset + TongueCollisionSize / 2;
+
+    private Rectangle TongueCollisionRectangle => new(
+        (int)tonguePosition.X + TongueCollisionOffset,
+        (int)tonguePosition.Y + TongueCollisionOffset,
+        TongueCollisionSize, TongueCollisionSize);
+
+    private Vector2 TongueOrigin => Position
+                                    - new Vector2(TongueCenterOffset, TongueCenterOffset)
+                                    + new Vector2(direction.Value == 3 ? 0.0f : 28f, -20f);
+
+    private Monster? GetTargetMonster(GameLocation location)
+    {
+        var monsterWithinRange = Utility.findClosestMonsterWithinRange(location, Position, RANGE);
+        switch (monsterWithinRange)
+        {
+            case null:
+                return null;
+            case Bat when monsterWithinRange.Age == 789: // Mayor basement bat, 789 = shorts id
+                return null;
+            case GreenSlime {prismatic.Value: true }:
+                return null;
+            default:
+                if (monsterWithinRange.Name.Equals("Truffle Crab"))
+                    return null;
+                break;
+        }
+
+        return monsterWithinRange;
+    }
+
+    private void SnapAttachedMonsterToTongue()
+    {
+        attachedMonster.Position = tonguePosition.Value;
+        attachedMonster.xVelocity = 0.0f;
+        attachedMonster.yVelocity = 0.0f;
+    }
+    
     public override void Update(GameTime time, GameLocation location)
     {
         if (!tongueOut.Value)
@@ -16,12 +65,13 @@ public class BetterFrogCompanion : HungryFrogCompanion
             return;
 
         //Advance timers
+        float deltaTime = (float)time.ElapsedGameTime.TotalMilliseconds;
         if (fullnessTime > 0.0)
-            fullnessTime -= (float)time.ElapsedGameTime.TotalMilliseconds;
-        lastHopTimer += (float)time.ElapsedGameTime.TotalMilliseconds;
+            fullnessTime -= deltaTime;
+        lastHopTimer += deltaTime;
         if (initialEquipDelay > 0.0)
         {
-            initialEquipDelay -= (float)time.ElapsedGameTime.TotalMilliseconds;
+            initialEquipDelay -= deltaTime;
             return; // in delay
         }
 
@@ -30,118 +80,99 @@ public class BetterFrogCompanion : HungryFrogCompanion
         {
             if (tongueOut.Value && attachedMonster != null)
             {
-                attachedMonster.Position = tonguePosition.Value;
                 attachedMonster.position.Paused = true;
-                attachedMonster.xVelocity = 0.0f;
-                attachedMonster.yVelocity = 0.0f;
+                SnapAttachedMonsterToTongue();
             }
-
             fullnessTrigger.Poll();
             return;
         }
 
-        monsterEatCheckTimer += (float)time.ElapsedGameTime.TotalMilliseconds;
-        if (monsterEatCheckTimer >= 2000.0 && fullnessTime <= 0.0 && !tongueOut.Value)
+        monsterEatCheckTimer += deltaTime;
+        bool wantsToEat = monsterEatCheckTimer >= 2000.0 && fullnessTime <= 0.0; 
+        if (wantsToEat && !tongueOut.Value)
         {
-            monsterEatCheckTimer = 0.0f;
-            if (location is not SlimeHutch)
+            monsterEatCheckTimer = 0;
+            if (CanCurrentlyEat(location))
             {
-                var monsterWithinRange = Utility.findClosestMonsterWithinRange(location, Position, 300);
-                if (monsterWithinRange != null)
+                var targetMonster = GetTargetMonster(location);
+                if (targetMonster == null)
                 {
-                    if (monsterWithinRange is Bat && monsterWithinRange.Age == 789)
-                    {
-                        monsterEatCheckTimer = 0.0f;
-                        return;
-                    }
-
-                    if (monsterWithinRange.Name.Equals("Truffle Crab"))
-                    {
-                        monsterEatCheckTimer = 0.0f;
-                        return;
-                    }
-
-                    if (monsterWithinRange is GreenSlime greenSlime && greenSlime.prismatic.Value)
-                    {
-                        monsterEatCheckTimer = 0.0f;
-                        return;
-                    }
-
-                    height = 0.0f;
-                    Vector2 velocityTowardPoint =
-                        Utility.getVelocityTowardPoint(Position, monsterWithinRange.getStandingPosition(), 12f);
-                    tongueOut.Value = true;
-                    tongueReturn.Value = false;
-                    tonguePosition.Value = Position + new Vector2(-32f, -32f) +
-                                           new Vector2(direction.Value != 3 ? 28f : 0.0f, -20f);
-                    tongueVelocity.Value = velocityTowardPoint;
-                    location.playSound("croak");
-                    direction.Value = monsterWithinRange.Position.X < (double)Position.X ? 3 : 1;
+                    //TODO in the base code, it only did this if the closes monster existed but wasn't valid, such as truffle crab.
+                    //Should verify if it is ok to return even when there is no monster nearby, but I feel like it is.
+                    monsterEatCheckTimer = 0;
+                    return;
                 }
-            }
 
-            tongueOutTimer = 0.0f;
+                ShootTongue(location, targetMonster);
+            }
+            tongueOutTimer = 0;
         }
 
         if (tongueOut.Value)
         {
-            tongueOutTimer +=
-                (float)(time.ElapsedGameTime.TotalMilliseconds * (tongueReturn ? -1.0 : 1.0));
-            NetPosition tonguePosition = this.tonguePosition;
-            tonguePosition.Value += tongueVelocity.Value;
-            if (attachedMonster == null)
-            {
-                if ((double)Vector2.Distance(Position, tonguePosition.Value) >= 300.0)
-                {
-                    tongueReachedMonster(null);
-                }
-                else
-                {
-                    int num = 40;
-                    if (Owner.currentLocation.doesPositionCollideWithCharacter(new Rectangle(
-                            (int)tonguePosition.X + 32 - num / 2, (int)tonguePosition.Y + 32 - num / 2, num,
-                            num)) is Monster m)
-                        tongueReachedMonster(m);
-                }
-            }
+            UpdateTongue(deltaTime, location);
+        }
+    }
 
+    private void ShootTongue(GameLocation location, Monster targetMonster)
+    {
+        height = 0;
+        tongueOut.Value = true;
+        tongueReturn.Value = false;
+        tonguePosition.Value = TongueOrigin;
+        tongueVelocity.Value = Utility.getVelocityTowardPoint(Position, targetMonster.getStandingPosition(), Speed);
+        direction.Value = targetMonster.Position.X < Position.X ? 3 : 1;
+        location.playSound("croak");
+    }
+
+
+    private void UpdateTongue(float deltaTime, GameLocation location)
+    {
+        tongueOutTimer += deltaTime * (tongueReturn ? -1 : 1);
+        tonguePosition.Value += tongueVelocity.Value;
+        
+        if (attachedMonster == null)
+        {
+            if (Vector2.Distance(Position, tonguePosition.Value) >= RANGE)
+                tongueReachedMonster(null);
+            else if (Owner.currentLocation.doesPositionCollideWithCharacter(TongueCollisionRectangle) is Monster m)
+                tongueReachedMonster(m);
+        }
+        
+        if (attachedMonster != null)
+        {
+            SnapAttachedMonsterToTongue();
+        }
+
+        //Tongue is returning to frog
+        if (tongueReturn)
+        {
+            Vector2 returnDirection = TongueOrigin - tonguePosition.Value;
+            returnDirection.Normalize();
+            tongueVelocity.Value = returnDirection * Speed;
+        }
+
+        //Tongue returned to frog 
+        if (tongueReturn && Vector2.Distance(Position, tonguePosition.Value) <= 48.0 || tongueOutTimer <= 0.0)
+        {
             if (attachedMonster != null)
             {
-                attachedMonster.Position = tonguePosition.Value;
-                attachedMonster.xVelocity = 0.0f;
-                attachedMonster.yVelocity = 0.0f;
+                EatMonster(location);
             }
-
-            if (tongueReturn.Value)
-            {
-                Vector2 vector2 =
-                    Vector2.Subtract(
-                        Position + new Vector2(-32f, -32f) + new Vector2(direction.Value != 3 ? 28f : 0.0f, -20f),
-                        tonguePosition.Value);
-                vector2.Normalize();
-                tongueVelocity.Value = vector2 * 12f;
-            }
-
-            if (tongueReturn.Value && (double)Vector2.Distance(Position, tonguePosition.Value) <= 48.0 ||
-                (double)tongueOutTimer <= 0.0)
-            {
-                if (attachedMonster != null)
-                {
-                    if (this.attachedMonster is HotHead attachedMonster &&
-                        attachedMonster.timeUntilExplode.Value > 0.0)
-                        attachedMonster.currentLocation?.netAudio.StopPlaying("fuse");
-                    if (this.attachedMonster.currentLocation != null)
-                        this.attachedMonster.currentLocation.characters.Remove(this.attachedMonster);
-                    else
-                        location.characters.Remove(this.attachedMonster);
-                    fullnessTrigger.Fire();
-                    this.attachedMonster = null;
-                }
-
-                double num = Vector2.Distance(Position, tonguePosition.Value);
-                tongueOut.Value = false;
-                tongueReturn.Value = false;
-            }
+            tongueOut.Value = false;
+            tongueReturn.Value = false;
         }
+    }
+
+    private void EatMonster(GameLocation location)
+    {
+        if (attachedMonster is HotHead hotHead && hotHead.timeUntilExplode.Value > 0.0)
+            hotHead.currentLocation?.netAudio.StopPlaying("fuse");
+        if (attachedMonster.currentLocation != null)
+            attachedMonster.currentLocation.characters.Remove(attachedMonster);
+        else
+            location.characters.Remove(attachedMonster);
+        fullnessTrigger.Fire();
+        attachedMonster = null;
     }
 }
