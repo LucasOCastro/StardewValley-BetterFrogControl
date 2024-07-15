@@ -4,7 +4,7 @@
   "Version": "1.0.0",
   "Description": "Better control over what your trinket frog swallows and spits!",
   "UniqueID": "malkavian.betterfrogcontrol",
-  "EntryDll": "betterfrogcontrol.dll",
+  "EntryDll": "StardewBetterFrog.dll",
   "MinimumApiVersion": "4.0.0",
   "UpdateKeys": []
 }
