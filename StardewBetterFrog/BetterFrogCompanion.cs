@@ -127,6 +127,7 @@ public class BetterFrogCompanion : HungryFrogCompanion
         
         //Send the monster away from the player
         var knockBack = Utility.getAwayFromPlayerTrajectory(new(Position.ToPoint(), new(1)), Owner);
+        _monsterInMouth.Position += knockBack / 3f;
         _monsterInMouth.setTrajectory(knockBack / 3f);
         
         //Set a delay before eating the next monster
