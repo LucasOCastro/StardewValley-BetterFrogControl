@@ -19,8 +19,7 @@ public class BetterFrogCompanion : HungryFrogCompanion
     //GameLocation.onMonsterKilled(Farmer who, Monster monster, Rectangle monsterBox);
     private static readonly MethodInfo LocationMonsterKilledMethod = AccessTools.Method(typeof(GameLocation), "onMonsterKilled");
 
-    private Predicate<Monster>? _blacklistPredicate;
-    private float _predicateTimerSeconds;
+    private readonly List<SwallowBlacklistPredicate> _blacklistPredicates = new();
     
     private Monster? _monsterInMouth;
     private int _oldDamageToFarmer;
@@ -28,7 +27,7 @@ public class BetterFrogCompanion : HungryFrogCompanion
     
     private static Vector2 MousePos => Game1.getMousePosition().ToVector2() + new Vector2(Game1.viewport.X, Game1.viewport.Y);
 
-    public bool IsBlacklisted(Monster monster) => _blacklistPredicate != null && _blacklistPredicate(monster);
+    public bool IsBlacklisted(Monster monster) => _blacklistPredicates.Any(p => p.IsBlacklisted(monster));
     
     public BetterFrogCompanion()
     {
@@ -42,16 +41,8 @@ public class BetterFrogCompanion : HungryFrogCompanion
     
     public override void Update(GameTime time, GameLocation location)
     {
-        // Advance predicate timer
-        if (_predicateTimerSeconds > 0)
-        {
-            _predicateTimerSeconds -= (float)time.ElapsedGameTime.TotalSeconds;
-            if (_predicateTimerSeconds <= 0 || _blacklistPredicate == null)
-            {
-                _predicateTimerSeconds = 0;
-                _blacklistPredicate = null;
-            }
-        }
+        // Advance predicates timers
+        _blacklistPredicates.RemoveAll(p => p.ShouldClearDueToTimer((float)time.ElapsedGameTime.TotalSeconds));
         
         // Will finish digesting the monster
         if (fullnessTime > 0 && fullnessTime <= (float)time.ElapsedGameTime.TotalMilliseconds)
@@ -78,8 +69,7 @@ public class BetterFrogCompanion : HungryFrogCompanion
     {
         base.OnOwnerWarp();
         _monsterInMouth = null;
-        if (ModEntry.ConfigSingleton.BlacklistDuration == BlacklistDuration.UntilLeave) 
-            _blacklistPredicate = null;
+        _blacklistPredicates.RemoveAll(p => p.ShouldClearDueToWarp());
     }
     
     /// <summary>
@@ -140,9 +130,7 @@ public class BetterFrogCompanion : HungryFrogCompanion
         _monsterInMouth.farmerPassesThrough = _oldFarmerPassesThrough;
         
         //Set up the blacklist
-        _blacklistPredicate = GetBlacklistPredicate(_monsterInMouth, ModEntry.ConfigSingleton.BlacklistType);
-        if (ModEntry.ConfigSingleton.BlacklistDuration == BlacklistDuration.Time)
-            _predicateTimerSeconds = ModEntry.ConfigSingleton.BlacklistDurationSeconds;
+        _blacklistPredicates.Add(new(_monsterInMouth));
         
         _monsterInMouth = null;
     }
@@ -160,15 +148,4 @@ public class BetterFrogCompanion : HungryFrogCompanion
         
         SpitMonster(location);
     }
-
-    /// <returns>A predicate which returns true if a monster is blacklisted.</returns>
-    private static Predicate<Monster> GetBlacklistPredicate(Monster source, BlacklistType blacklistType) =>
-        blacklistType switch
-        {
-            BlacklistType.SameMonster => (m => m == source),
-            BlacklistType.SameType => (m => m.Name == source.Name),
-            BlacklistType.Everything => (_ => true),
-            BlacklistType.None => (_ => false),
-            _ => throw new ArgumentOutOfRangeException(nameof(blacklistType), blacklistType, null)
-        };
 }
