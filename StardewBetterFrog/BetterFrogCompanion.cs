@@ -1,7 +1,6 @@
 ﻿using System.Reflection;
 using HarmonyLib;
 using Microsoft.Xna.Framework;
-using StardewModdingAPI;
 using StardewValley;
 using StardewValley.Companions;
 using StardewValley.Monsters;
@@ -14,8 +13,6 @@ namespace StardewBetterFrog;
 
 public class BetterFrogCompanion : HungryFrogCompanion
 {
-    public static IMonitor? Monitor { get; set; }
-    
     private static readonly PropertyInfo AttachedMonsterField = AccessTools.Property(typeof(HungryFrogCompanion), "attachedMonster");
     private static readonly MethodInfo LocationMonsterKilledMethod = AccessTools.Method(typeof(GameLocation), "onMonsterKilled");
 
@@ -23,12 +20,12 @@ public class BetterFrogCompanion : HungryFrogCompanion
 
     public BetterFrogCompanion()
     {
-        Monitor?.Log("Better frog constructed.");
+        ModEntry.MonitorSingleton?.Log("Better frog constructed.");
     }
 
     public BetterFrogCompanion(int variant) : base(variant)
     {
-        Monitor?.Log("Better frog constructed.");
+        ModEntry.MonitorSingleton?.Log("Better frog constructed.");
     }
     
     public override void Update(GameTime time, GameLocation location)
@@ -61,8 +58,11 @@ public class BetterFrogCompanion : HungryFrogCompanion
     {
         if (_monsterInMouth == null) return;
 
-        //location.onMonsterKilled(Farmer who, Monster monster, Rectangle monsterBox);
-        LocationMonsterKilledMethod.Invoke(location, new object[]{Owner, _monsterInMouth, new Rectangle(Position.ToPoint(), new(40))});
+        if (ModEntry.ConfigSingleton.CountAsPlayerKill)
+        {
+            //location.onMonsterKilled(Farmer who, Monster monster, Rectangle monsterBox);
+            LocationMonsterKilledMethod.Invoke(location, new object[]{Owner, _monsterInMouth, new Rectangle(Position.ToPoint(), new(40))});   
+        }
         _monsterInMouth = null;
     }
 

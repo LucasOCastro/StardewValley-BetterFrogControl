@@ -7,14 +7,14 @@ namespace StardewBetterFrog;
 
 public sealed class ModEntry : Mod
 {
-    private ModConfig _config = new();
-    
+    public static ModConfig ConfigSingleton { get; private set; } = new();
+    public static IMonitor? MonitorSingleton { get; private set; }
+
     public override void Entry(IModHelper helper)
     {
-        BetterFrogCompanion.Monitor = Monitor;
-        
         //Setup config
-        _config = helper.ReadConfig<ModConfig>();
+        MonitorSingleton = Monitor;
+        ConfigSingleton = helper.ReadConfig<ModConfig>();
         helper.Events.GameLoop.GameLaunched += SetupConfigMenu;
         
         //Setup Harmony
@@ -32,9 +32,9 @@ public sealed class ModEntry : Mod
         
         configMenu.Register(
             mod: ModManifest,
-            reset: () => _config = new(),
-            save: () => Helper.WriteConfig(_config)
+            reset: () => ConfigSingleton = new(),
+            save: () => Helper.WriteConfig(ConfigSingleton)
         );
-        _config.RegisterConfig(ModManifest, configMenu);
+        ConfigSingleton.RegisterConfig(ModManifest, configMenu);
     }
 }
