@@ -13,9 +13,6 @@ public class BetterFrogCompanion : HungryFrogCompanion
     //float monsterEatCheckTimer;
     private static readonly FieldInfo MonsterEatCheckTimeField = AccessTools.Field(typeof(HungryFrogCompanion), "monsterEatCheckTimer");
     
-    //Monster HungryFrogCompanion.attachedMonster
-    //private static readonly PropertyInfo AttachedMonsterField = AccessTools.Property(typeof(HungryFrogCompanion), "attachedMonster");
-    
     //GameLocation.onMonsterKilled(Farmer who, Monster monster, Rectangle monsterBox);
     private static readonly MethodInfo LocationMonsterKilledMethod = AccessTools.Method(typeof(GameLocation), "onMonsterKilled");
 
@@ -29,15 +26,10 @@ public class BetterFrogCompanion : HungryFrogCompanion
 
     public bool IsBlacklisted(Monster monster) => _blacklistPredicates.Any(p => p.IsBlacklisted(monster));
     
-    public BetterFrogCompanion()
-    {
-        ModEntry.MonitorSingleton?.Log("Better frog constructed.");
-    }
-
-    public BetterFrogCompanion(int variant) : base(variant)
-    {
-        ModEntry.MonitorSingleton?.Log("Better frog constructed.");
-    }
+    public BetterFrogCompanion() => ModEntry.MonitorSingleton?.Log("Better frog constructed.");
+    public BetterFrogCompanion(int variant) : base(variant) => ModEntry.MonitorSingleton?.Log("Better frog constructed.");
+    
+    #region OVERRIDES
     
     public override void Update(GameTime time, GameLocation location)
     {
@@ -46,23 +38,17 @@ public class BetterFrogCompanion : HungryFrogCompanion
         
         // Will finish digesting the monster
         if (fullnessTime > 0 && fullnessTime <= (float)time.ElapsedGameTime.TotalMilliseconds)
-        {
             OnDigestionComplete(location);
-        }
         
         base.Update(time, location);
         
         // Ate a new monster
         //if (AttachedMonsterField.GetValue(this) is Monster attachedMonster && attachedMonster != _monsterInMouth)
-        //{
         //    OnMonsterEaten(attachedMonster);
-        //}
         // CHANGED TO A HARMONY PREFIX Because I need to cache the monster values before being swallowed.
 
         if (IsLocal)
-        {
             HandleInput(location);
-        }
     }
 
     public override void OnOwnerWarp()
@@ -71,6 +57,15 @@ public class BetterFrogCompanion : HungryFrogCompanion
         _monsterInMouth = null;
         _blacklistPredicates.RemoveAll(p => p.ShouldClearDueToWarp());
     }
+    
+    public override void CleanupCompanion()
+    {
+        base.CleanupCompanion();
+        _monsterInMouth = null;
+        _blacklistPredicates.Clear();
+    }
+    
+    #endregion
     
     /// <summary>
     /// Called when a monster is brought to the frog via tongue and swallowed.
