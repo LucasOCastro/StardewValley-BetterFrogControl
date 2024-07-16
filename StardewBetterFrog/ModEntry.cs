@@ -18,10 +18,6 @@ public sealed class ModEntry : Mod
         ConfigSingleton = helper.ReadConfig<ModConfig>();
         helper.Events.GameLoop.GameLaunched += SetupConfigMenu;
         
-        helper.Events.Input.ButtonPressed += (_, e) =>
-        {
-        };
-        
         //Setup Harmony
         Harmony harmony = new(ModManifest.UniqueID);
         harmony.Patch(
@@ -30,7 +26,11 @@ public sealed class ModEntry : Mod
         );
         harmony.Patch(
             original: AccessTools.Method(typeof(HungryFrogCompanion), nameof(HungryFrogCompanion.tongueReachedMonster)),
-            prefix: new(typeof(BetterFrogCompanion), nameof(BetterFrogCompanion.TongueReachedMonster_Prefix))
+            prefix: new(typeof(HungryFrogCompanionPatches), nameof(HungryFrogCompanionPatches.TongueReachedMonster_CallOnMonsterEaten_Prefix))
+        );
+        harmony.Patch(
+            original: AccessTools.Method(typeof(HungryFrogCompanion), nameof(HungryFrogCompanion.Update)),
+            transpiler: new(typeof(HungryFrogCompanionPatches), nameof(HungryFrogCompanionPatches.Update_UseCustomTargetFunction_Transpiler))
         );
     }
 

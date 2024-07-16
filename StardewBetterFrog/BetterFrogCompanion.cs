@@ -19,12 +19,17 @@ public class BetterFrogCompanion : HungryFrogCompanion
     //GameLocation.onMonsterKilled(Farmer who, Monster monster, Rectangle monsterBox);
     private static readonly MethodInfo LocationMonsterKilledMethod = AccessTools.Method(typeof(GameLocation), "onMonsterKilled");
 
+    private Predicate<Monster>? _blacklistPredicate;
+    private float _predicateTimerSeconds;
+    
     private Monster? _monsterInMouth;
     private int _oldDamageToFarmer;
     private bool _oldFarmerPassesThrough;
     
     private static Vector2 MousePos => Game1.getMousePosition().ToVector2() + new Vector2(Game1.viewport.X, Game1.viewport.Y);
 
+    public bool IsBlacklisted(Monster monster) => _blacklistPredicate != null && _blacklistPredicate(monster);
+    
     public BetterFrogCompanion()
     {
         ModEntry.MonitorSingleton?.Log("Better frog constructed.");
@@ -37,7 +42,18 @@ public class BetterFrogCompanion : HungryFrogCompanion
     
     public override void Update(GameTime time, GameLocation location)
     {
-        // Digested a monster
+        // Advance predicate timer
+        if (_predicateTimerSeconds > 0)
+        {
+            _predicateTimerSeconds -= (float)time.ElapsedGameTime.TotalSeconds;
+            if (_predicateTimerSeconds <= 0 || _blacklistPredicate == null)
+            {
+                _predicateTimerSeconds = 0;
+                _blacklistPredicate = null;
+            }
+        }
+        
+        // Will finish digesting the monster
         if (fullnessTime > 0 && fullnessTime <= (float)time.ElapsedGameTime.TotalMilliseconds)
         {
             OnDigestionComplete(location);
@@ -50,8 +66,7 @@ public class BetterFrogCompanion : HungryFrogCompanion
         //{
         //    OnMonsterEaten(attachedMonster);
         //}
-        // CHANGED TO A HARMONY PREFIX
-        // Because I need to cache th monster values before being swallowed.
+        // CHANGED TO A HARMONY PREFIX Because I need to cache the monster values before being swallowed.
 
         if (IsLocal)
         {
@@ -63,12 +78,14 @@ public class BetterFrogCompanion : HungryFrogCompanion
     {
         base.OnOwnerWarp();
         _monsterInMouth = null;
+        if (ModEntry.ConfigSingleton.BlacklistDuration == BlacklistDuration.UntilLeave) 
+            _blacklistPredicate = null;
     }
     
     /// <summary>
     /// Called when a monster is brought to the frog via tongue and swallowed.
     /// </summary>
-    private void OnMonsterEaten(Monster? monster)
+    public void OnMonsterEaten(Monster? monster)
     {
         if (monster == null) return;
         
@@ -120,6 +137,12 @@ public class BetterFrogCompanion : HungryFrogCompanion
         _monsterInMouth.position.Paused = false;
         _monsterInMouth.DamageToFarmer = _oldDamageToFarmer;
         _monsterInMouth.farmerPassesThrough = _oldFarmerPassesThrough;
+        
+        //Set up the blacklist
+        _blacklistPredicate = GetBlacklistPredicate(_monsterInMouth, ModEntry.ConfigSingleton.BlacklistType);
+        if (ModEntry.ConfigSingleton.BlacklistDuration == BlacklistDuration.Time)
+            _predicateTimerSeconds = ModEntry.ConfigSingleton.BlacklistDurationSeconds;
+        
         _monsterInMouth = null;
     }
 
@@ -136,15 +159,15 @@ public class BetterFrogCompanion : HungryFrogCompanion
         
         SpitMonster(location);
     }
-    
-    // ReSharper disable once InconsistentNaming
-    /// <summary>
-    /// If the frog instance is a <see cref="BetterFrogCompanion"/>,
-    /// will cache the monster before it is swallowed.
-    /// </summary>
-    public static void TongueReachedMonster_Prefix(HungryFrogCompanion __instance, Monster m)
-    {
-        if (__instance is BetterFrogCompanion betterFrog)
-            betterFrog.OnMonsterEaten(m);
-    }
+
+    /// <returns>A predicate which returns true if a monster is blacklisted.</returns>
+    private static Predicate<Monster> GetBlacklistPredicate(Monster source, BlacklistType blacklistType) =>
+        blacklistType switch
+        {
+            BlacklistType.SameMonster => (m => m == source),
+            BlacklistType.SameType => (m => m.Name == source.Name),
+            BlacklistType.Everything => (_ => true),
+            BlacklistType.None => (_ => false),
+            _ => throw new ArgumentOutOfRangeException(nameof(blacklistType), blacklistType, null)
+        };
 }
