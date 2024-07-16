@@ -68,8 +68,10 @@ public class BetterFrogCompanion : HungryFrogCompanion
     /// <summary>
     /// Called when a monster is brought to the frog via tongue and swallowed.
     /// </summary>
-    private void OnMonsterEaten(Monster monster)
+    private void OnMonsterEaten(Monster? monster)
     {
+        if (monster == null) return;
+        
         ModEntry.MonitorSingleton?.Log("Swallowed monster: " + monster.Name);
         _monsterInMouth = monster;
         _oldDamageToFarmer = monster.DamageToFarmer;
