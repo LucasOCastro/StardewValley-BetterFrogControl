@@ -19,8 +19,6 @@ public class BetterFrogCompanion : HungryFrogCompanion
     //GameLocation.onMonsterKilled(Farmer who, Monster monster, Rectangle monsterBox);
     private static readonly MethodInfo LocationMonsterKilledMethod = AccessTools.Method(typeof(GameLocation), "onMonsterKilled");
 
-    private const float ClickDistance = 60f;
-    
     private Monster? _monsterInMouth;
     private int _oldDamageToFarmer;
     private bool _oldFarmerPassesThrough;
@@ -57,10 +55,7 @@ public class BetterFrogCompanion : HungryFrogCompanion
 
         if (IsLocal)
         {
-            // Clicked the frog to spit a monster
-            if (_monsterInMouth != null && Game1.input.GetMouseState().RightButton == ButtonState.Pressed &&
-                Vector2.Distance(MousePos, Position) <= ClickDistance)
-                SpitMonster(location);
+            HandleInput(location);
         }
     }
 
@@ -125,8 +120,26 @@ public class BetterFrogCompanion : HungryFrogCompanion
         _monsterInMouth.farmerPassesThrough = _oldFarmerPassesThrough;
         _monsterInMouth = null;
     }
+
+    /// <summary>
+    /// Handles local user interaction with the frog.
+    /// </summary>
+    private void HandleInput(GameLocation location)
+    {
+        if (!ModEntry.ConfigSingleton.AllowSpittingMonster) return;
+
+        if (_monsterInMouth == null) return;
+        if (Game1.input.GetMouseState().RightButton != ButtonState.Pressed) return;
+        if (Vector2.Distance(MousePos, Position) > ModEntry.ConfigSingleton.FrogInteractDistance) return;
+        
+        SpitMonster(location);
+    }
     
     // ReSharper disable once InconsistentNaming
+    /// <summary>
+    /// If the frog instance is a <see cref="BetterFrogCompanion"/>,
+    /// will cache the monster before it is swallowed.
+    /// </summary>
     public static void TongueReachedMonster_Prefix(HungryFrogCompanion __instance, Monster m)
     {
         if (__instance is BetterFrogCompanion betterFrog)
