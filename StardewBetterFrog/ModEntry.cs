@@ -1,6 +1,7 @@
 ﻿using HarmonyLib;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
+using StardewValley.Companions;
 using StardewValley.Objects;
 
 namespace StardewBetterFrog;
@@ -17,11 +18,19 @@ public sealed class ModEntry : Mod
         ConfigSingleton = helper.ReadConfig<ModConfig>();
         helper.Events.GameLoop.GameLaunched += SetupConfigMenu;
         
+        helper.Events.Input.ButtonPressed += (_, e) =>
+        {
+        };
+        
         //Setup Harmony
         Harmony harmony = new(ModManifest.UniqueID);
         harmony.Patch(
             original: AccessTools.Method(typeof(CompanionTrinketEffect), nameof(CompanionTrinketEffect.Apply)),
             transpiler: new(typeof(CompanionTrinketEffectPatches), nameof(CompanionTrinketEffectPatches.Apply_UseBetterFrogConstructor_Transpiler))
+        );
+        harmony.Patch(
+            original: AccessTools.Method(typeof(HungryFrogCompanion), nameof(HungryFrogCompanion.tongueReachedMonster)),
+            prefix: new(typeof(BetterFrogCompanion), nameof(BetterFrogCompanion.TongueReachedMonster_Prefix))
         );
     }
 

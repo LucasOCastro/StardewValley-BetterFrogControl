@@ -1,22 +1,31 @@
 ﻿using System.Reflection;
 using HarmonyLib;
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Input;
 using StardewValley;
 using StardewValley.Companions;
 using StardewValley.Monsters;
 
 namespace StardewBetterFrog;
 
-//StardewValley.Stats.monsterKilled
-//StardewValley.GameLocation.onMonsterKilled
-//StardewValley.Monsters.Monster.takeDamage for knockback
-
 public class BetterFrogCompanion : HungryFrogCompanion
 {
-    private static readonly PropertyInfo AttachedMonsterField = AccessTools.Property(typeof(HungryFrogCompanion), "attachedMonster");
+    //float monsterEatCheckTimer;
+    private static readonly FieldInfo MonsterEatCheckTimeField = AccessTools.Field(typeof(HungryFrogCompanion), "monsterEatCheckTimer");
+    
+    //Monster HungryFrogCompanion.attachedMonster
+    //private static readonly PropertyInfo AttachedMonsterField = AccessTools.Property(typeof(HungryFrogCompanion), "attachedMonster");
+    
+    //GameLocation.onMonsterKilled(Farmer who, Monster monster, Rectangle monsterBox);
     private static readonly MethodInfo LocationMonsterKilledMethod = AccessTools.Method(typeof(GameLocation), "onMonsterKilled");
 
+    private const float ClickDistance = 60f;
+    
     private Monster? _monsterInMouth;
+    private int _oldDamageToFarmer;
+    private bool _oldFarmerPassesThrough;
+    
+    private static Vector2 MousePos => Game1.getMousePosition().ToVector2() + new Vector2(Game1.viewport.X, Game1.viewport.Y);
 
     public BetterFrogCompanion()
     {
@@ -30,7 +39,7 @@ public class BetterFrogCompanion : HungryFrogCompanion
     
     public override void Update(GameTime time, GameLocation location)
     {
-        //Digested a monster
+        // Digested a monster
         if (fullnessTime > 0 && fullnessTime <= (float)time.ElapsedGameTime.TotalMilliseconds)
         {
             OnDigestionComplete(location);
@@ -38,10 +47,20 @@ public class BetterFrogCompanion : HungryFrogCompanion
         
         base.Update(time, location);
         
-        //Ate a new monster
-        if (AttachedMonsterField.GetValue(this) is Monster attachedMonster && attachedMonster != _monsterInMouth)
+        // Ate a new monster
+        //if (AttachedMonsterField.GetValue(this) is Monster attachedMonster && attachedMonster != _monsterInMouth)
+        //{
+        //    OnMonsterEaten(attachedMonster);
+        //}
+        // CHANGED TO A HARMONY PREFIX
+        // Because I need to cache th monster values before being swallowed.
+
+        if (IsLocal)
         {
-            OnMonsterEaten(attachedMonster);
+            // Clicked the frog to spit a monster
+            if (_monsterInMouth != null && Game1.input.GetMouseState().RightButton == ButtonState.Pressed &&
+                Vector2.Distance(MousePos, Position) <= ClickDistance)
+                SpitMonster(location);
         }
     }
 
@@ -50,27 +69,67 @@ public class BetterFrogCompanion : HungryFrogCompanion
         base.OnOwnerWarp();
         _monsterInMouth = null;
     }
-
+    
+    /// <summary>
+    /// Called when a monster is brought to the frog via tongue and swallowed.
+    /// </summary>
+    private void OnMonsterEaten(Monster monster)
+    {
+        ModEntry.MonitorSingleton?.Log("Swallowed monster: " + monster.Name);
+        _monsterInMouth = monster;
+        _oldDamageToFarmer = monster.DamageToFarmer;
+        _oldFarmerPassesThrough = monster.farmerPassesThrough;
+    }
+    
     /// <summary>
     /// Called when the frog finishes digesting what it had in its mouth and is able to swallow another monster.
     /// </summary>
     private void OnDigestionComplete(GameLocation location)
     {
         if (_monsterInMouth == null) return;
-
+        ModEntry.MonitorSingleton?.Log("Digested monster: " + _monsterInMouth.Name);
+        
+        //Register that the monster was killed
         if (ModEntry.ConfigSingleton.CountAsPlayerKill)
-        {
-            //location.onMonsterKilled(Farmer who, Monster monster, Rectangle monsterBox);
             LocationMonsterKilledMethod.Invoke(location, new object[]{Owner, _monsterInMouth, new Rectangle(Position.ToPoint(), new(40))});   
-        }
+
         _monsterInMouth = null;
     }
-
+    
     /// <summary>
-    /// Called when a monster is brought to the frog via tongue and swallowed.
+    /// Places the currently swallowed monster back into the location.
     /// </summary>
-    private void OnMonsterEaten(Monster monster)
+    private void SpitMonster(GameLocation location)
     {
-        _monsterInMouth = monster;
+        ModEntry.MonitorSingleton?.Log("Requested spit monster: " + _monsterInMouth?.Name);
+        if (_monsterInMouth == null) return;
+        
+        fullnessTime = 0; // Coincidentally public field for some reason lol
+
+        Owner.currentLocation.localSound("fishSlap");
+        //Add monster back to location
+        location.addCharacter(_monsterInMouth);
+        _monsterInMouth.Position = Position;
+        
+        //Send the monster away from the player
+        var knockBack = Utility.getAwayFromPlayerTrajectory(new(Position.ToPoint(), new(1)), Owner);
+        _monsterInMouth.setTrajectory(knockBack / 3f);
+        
+        //Set a delay before eating the next monster
+        MonsterEatCheckTimeField.SetValue(this, 0);
+
+        //Revert stats to before swallow
+        _monsterInMouth.stunTime.Value = 50;
+        _monsterInMouth.position.Paused = false;
+        _monsterInMouth.DamageToFarmer = _oldDamageToFarmer;
+        _monsterInMouth.farmerPassesThrough = _oldFarmerPassesThrough;
+        _monsterInMouth = null;
+    }
+    
+    // ReSharper disable once InconsistentNaming
+    public static void TongueReachedMonster_Prefix(HungryFrogCompanion __instance, Monster m)
+    {
+        if (__instance is BetterFrogCompanion betterFrog)
+            betterFrog.OnMonsterEaten(m);
     }
 }
