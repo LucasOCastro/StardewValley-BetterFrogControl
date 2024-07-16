@@ -2,12 +2,14 @@
 using System.Reflection.Emit;
 using HarmonyLib;
 using Microsoft.Xna.Framework;
+using StardewBetterFrog.FrogStuffs;
 using StardewValley;
 using StardewValley.Companions;
 using StardewValley.Monsters;
+
 // ReSharper disable InconsistentNaming
 
-namespace StardewBetterFrog;
+namespace StardewBetterFrog.Patches;
 
 public static class HungryFrogCompanionPatches
 {

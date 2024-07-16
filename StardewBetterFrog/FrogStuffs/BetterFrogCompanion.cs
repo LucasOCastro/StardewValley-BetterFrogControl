@@ -6,7 +6,7 @@ using StardewValley;
 using StardewValley.Companions;
 using StardewValley.Monsters;
 
-namespace StardewBetterFrog;
+namespace StardewBetterFrog.FrogStuffs;
 
 public class BetterFrogCompanion : HungryFrogCompanion
 {

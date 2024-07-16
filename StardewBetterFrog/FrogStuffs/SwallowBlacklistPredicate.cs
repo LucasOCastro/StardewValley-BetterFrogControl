@@ -1,6 +1,6 @@
 ﻿using StardewValley.Monsters;
 
-namespace StardewBetterFrog;
+namespace StardewBetterFrog.FrogStuffs;
 
 public class SwallowBlacklistPredicate
 {

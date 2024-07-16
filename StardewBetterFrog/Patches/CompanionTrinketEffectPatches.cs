@@ -1,9 +1,10 @@
 ﻿using System.Reflection;
 using System.Reflection.Emit;
 using HarmonyLib;
+using StardewBetterFrog.FrogStuffs;
 using StardewValley.Companions;
 
-namespace StardewBetterFrog;
+namespace StardewBetterFrog.Patches;
 
 public static class CompanionTrinketEffectPatches
 {
