@@ -54,7 +54,6 @@ public class BetterFrogCompanion : HungryFrogCompanion
     public override void OnOwnerWarp()
     {
         base.OnOwnerWarp();
-        _monsterInMouth = null;
         _blacklistPredicates.RemoveAll(p => p.ShouldClearDueToWarp());
     }
     
