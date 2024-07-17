@@ -1,7 +1,7 @@
 ﻿{
   "Name": "Better Frog Control",
   "Author": "Malkavian",
-  "Version": "1.0.0",
+  "Version": "1.0.1",
   "Description": "Better control over what your trinket frog swallows and spits!",
   "UniqueID": "malkavian.betterfrogcontrol",
   "EntryDll": "StardewBetterFrog.dll",
