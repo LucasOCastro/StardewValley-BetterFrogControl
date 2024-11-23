@@ -3,7 +3,7 @@ using StardewBetterFrog.Patches;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewValley.Companions;
-using StardewValley.Objects;
+using StardewValley.Objects.Trinkets;
 
 namespace StardewBetterFrog;
 

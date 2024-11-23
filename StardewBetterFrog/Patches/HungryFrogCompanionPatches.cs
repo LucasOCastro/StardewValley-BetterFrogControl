@@ -13,26 +13,14 @@ namespace StardewBetterFrog.Patches;
 
 public static class HungryFrogCompanionPatches
 {
-    private static readonly MethodInfo FindClosestMonsterMethod = AccessTools.Method(typeof(Utility), nameof(Utility.findClosestMonsterWithinRange), new[] { typeof(GameLocation), typeof(Vector2), typeof(int), typeof(bool) });
-    private static readonly MethodInfo FindClosestMonsterBetterFrogMethod = AccessTools.Method(typeof(HungryFrogCompanionPatches), nameof(FindClosestMonster_BetterFrog));
-
-    /// <summary>
-    /// If frog is not BetterFrog, use the default <see cref="Utility.findClosestMonsterWithinRange"/>.
-    /// If is BetterFrog, use custom logic to apply the current blacklist.
-    /// </summary>
-    private static Monster FindClosestMonster_BetterFrog(GameLocation location, Vector2 originPoint, int range, bool ignoreUntargetables,
-        HungryFrogCompanion instance)
+    private static readonly MethodInfo FindClosestMonsterMethod = AccessTools.Method(typeof(Utility), nameof(Utility.findClosestMonsterWithinRange), new[] { typeof(GameLocation), typeof(Vector2), typeof(int), typeof(bool), typeof(Func<Monster, bool>) });
+    
+    private static Func<Monster, bool>? GetMatchPredicate(HungryFrogCompanion instance)
     {
         if (instance is not BetterFrogCompanion frog)
-            return Utility.findClosestMonsterWithinRange(location, originPoint, range);
+            return null;
         
-        return location.characters
-            .OfType<Monster>()
-            .Where(m => (!ignoreUntargetables || m is not Spiker) && !m.IsInvisible && !frog.IsBlacklisted(m))
-            .Select(m => (Monster: m, Dist: Vector2.Distance(originPoint, m.getStandingPosition())))
-            .Where(p => p.Dist <= range)
-            .DefaultIfEmpty()
-            .MinBy(p => p.Dist).Monster;
+        return frog.IsAllowed;
     }
     
     
@@ -41,15 +29,24 @@ public static class HungryFrogCompanionPatches
     /// </summary>
     public static IEnumerable<CodeInstruction> Update_UseCustomTargetFunction_Transpiler(IEnumerable<CodeInstruction> instructions)
     {
-        foreach (var instruction in instructions)
+        var instructionsList = instructions.ToList();
+        for (int i = 0; i < instructionsList.Count; i++)
         {
-            if (instruction.Calls(FindClosestMonsterMethod))
+            bool nextCalls = i < instructionsList.Count - 1 && instructionsList[i + 1].Calls(FindClosestMonsterMethod);
+            if (!nextCalls)
             {
-                yield return new(OpCodes.Ldarg_0);
-                instruction.operand = FindClosestMonsterBetterFrogMethod;
+                yield return instructionsList[i];
+                continue;
             }
-
-            yield return instruction;
+            
+            // The last instruction before calling the method loads a null for the match predicate.
+            // Instead, I'll load the current blacklist's predicate.
+            yield return new(OpCodes.Ldarg_0);
+            yield return CodeInstruction.Call(
+                typeof(HungryFrogCompanionPatches),
+                nameof(GetMatchPredicate),
+                new[] { typeof(HungryFrogCompanion) }
+            );
         }
     }
     

@@ -25,6 +25,7 @@ public class BetterFrogCompanion : HungryFrogCompanion
     private static Vector2 MousePos => Game1.getMousePosition().ToVector2() + new Vector2(Game1.viewport.X, Game1.viewport.Y);
 
     public bool IsBlacklisted(Monster monster) => _blacklistPredicates.Any(p => p.IsBlacklisted(monster));
+    public bool IsAllowed(Monster monster) => !IsBlacklisted(monster);
     
     public BetterFrogCompanion() => ModEntry.MonitorSingleton?.Log("Better frog constructed.");
     public BetterFrogCompanion(int variant) : base(variant) => ModEntry.MonitorSingleton?.Log("Better frog constructed.");
