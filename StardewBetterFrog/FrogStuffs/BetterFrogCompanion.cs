@@ -90,7 +90,7 @@ public class BetterFrogCompanion : HungryFrogCompanion
         
         //Register that the monster was killed
         if (ModEntry.ConfigSingleton.CountAsPlayerKill)
-            LocationMonsterKilledMethod.Invoke(location, new object[]{Owner, _monsterInMouth, new Rectangle(Position.ToPoint(), new(40))});   
+            LocationMonsterKilledMethod.Invoke(location, new object[]{Owner, _monsterInMouth, new Rectangle(Position.ToPoint(), new(40)), false});   
 
         _monsterInMouth = null;
     }
