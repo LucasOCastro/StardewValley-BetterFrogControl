@@ -105,7 +105,7 @@ public class BetterFrogCompanion : HungryFrogCompanion
         
         fullnessTime = 0; // Coincidentally public field for some reason lol
 
-        Owner.currentLocation.localSound("fishSlap");
+        Owner.currentLocation.playSound("fishSlap");
         //Add monster back to location
         location.addCharacter(_monsterInMouth);
         _monsterInMouth.Position = Position;
