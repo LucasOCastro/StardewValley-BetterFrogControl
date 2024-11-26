@@ -2,6 +2,7 @@
 using HarmonyLib;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
+using Netcode;
 using StardewValley;
 using StardewValley.Companions;
 using StardewValley.Monsters;
@@ -17,7 +18,10 @@ public class BetterFrogCompanion : HungryFrogCompanion
     private static readonly MethodInfo LocationMonsterKilledMethod = AccessTools.Method(typeof(GameLocation), "onMonsterKilled");
 
     private readonly List<SwallowBlacklistPredicate> _blacklistPredicates = new();
-    
+
+    private readonly NetEvent0 _clearFullnessTrigger = new();
+    private void OnClearFullnessTrigger() => fullnessTime = 0;  // Coincidentally public field for some reason lol
+
     private Monster? _monsterInMouth;
     private int _oldDamageToFarmer;
     private bool _oldFarmerPassesThrough;
@@ -34,6 +38,13 @@ public class BetterFrogCompanion : HungryFrogCompanion
     
     public override void Update(GameTime time, GameLocation location)
     {
+        if (!IsLocal)
+        {
+            base.Update(time, location);
+            _clearFullnessTrigger.Poll();
+            return;
+        }
+        
         // Advance predicates timers
         _blacklistPredicates.RemoveAll(p => p.ShouldClearDueToTimer((float)time.ElapsedGameTime.TotalSeconds));
         
@@ -48,8 +59,7 @@ public class BetterFrogCompanion : HungryFrogCompanion
         //    OnMonsterEaten(attachedMonster);
         // CHANGED TO A HARMONY PREFIX Because I need to cache the monster values before being swallowed.
 
-        if (IsLocal)
-            HandleInput(location);
+        HandleInput(location);
     }
 
     public override void OnOwnerWarp()
@@ -64,7 +74,15 @@ public class BetterFrogCompanion : HungryFrogCompanion
         _monsterInMouth = null;
         _blacklistPredicates.Clear();
     }
-    
+
+    public override void InitNetFields()
+    {
+        base.InitNetFields();
+
+        NetFields.AddField(_clearFullnessTrigger, nameof(_clearFullnessTrigger));
+        _clearFullnessTrigger.onEvent += OnClearFullnessTrigger;
+    }
+
     #endregion
     
     /// <summary>
@@ -72,6 +90,7 @@ public class BetterFrogCompanion : HungryFrogCompanion
     /// </summary>
     public void OnMonsterEaten(Monster? monster)
     {
+        if (!IsLocal) return;
         if (monster == null) return;
         
         ModEntry.MonitorSingleton?.Log("Swallowed monster: " + monster.Name);
@@ -85,6 +104,7 @@ public class BetterFrogCompanion : HungryFrogCompanion
     /// </summary>
     private void OnDigestionComplete(GameLocation location)
     {
+        if (!IsLocal) return;
         if (_monsterInMouth == null) return;
         ModEntry.MonitorSingleton?.Log("Digested monster: " + _monsterInMouth.Name);
         
@@ -103,9 +123,10 @@ public class BetterFrogCompanion : HungryFrogCompanion
         ModEntry.MonitorSingleton?.Log("Requested spit monster: " + _monsterInMouth?.Name);
         if (_monsterInMouth == null) return;
         
-        fullnessTime = 0; // Coincidentally public field for some reason lol
+        _clearFullnessTrigger.Fire();
 
         Owner.currentLocation.playSound("fishSlap");
+        
         //Add monster back to location
         location.addCharacter(_monsterInMouth);
         _monsterInMouth.Position = Position;
